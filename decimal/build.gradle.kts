@@ -71,7 +71,7 @@ mavenPublishing {
     )
 
     pom {
-        name.set("Decimal")
+        name.set("Decimal - Kotlin Multiplatform decimal numbers")
         description.set("Kotlin Multiplatform decimal numbers backed by BigDecimal on JVM/Android and NSDecimalNumber on Apple targets.")
         url.set("https://github.com/VoirDev/decimal-kmp/")
 
