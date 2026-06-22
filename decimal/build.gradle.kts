@@ -11,7 +11,7 @@ kotlin {
     jvm()
     android {
         namespace = "dev.voir.decimal"
-        compileSdk = 36
+        compileSdk = 37
         minSdk = 23
     }
     iosX64()
