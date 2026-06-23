@@ -284,25 +284,29 @@ class DecimalTest {
 
     @Test
     fun `formats decimal values for display`() {
-        assertEquals("1,234.57", decimal("1234.567").toFormattedString(scale = 2))
-        assertEquals("1,234", decimal("1234.4").toFormattedString(scale = 0))
-        assertEquals("1234.50", decimal("1234.5").toFormattedString(scale = 2, groupingSeparator = null))
-        assertEquals("1.234,57", decimal("1234.567").toFormattedString(scale = 2, decimalSeparator = ',', groupingSeparator = '.'))
-        assertEquals("-9 876 543,2", decimal("-9876543.21").toFormattedString(scale = 1, decimalSeparator = ',', groupingSeparator = ' '))
-        assertEquals("1.23", decimal("1.239").toFormattedString(scale = 2, rounding = Rounding.DOWN))
-        assertEquals("1.24", decimal("1.231").toFormattedString(scale = 2, rounding = Rounding.UP))
+        assertEquals("1,234.57", decimal("1234.567").toFormattedString(maximumFractionDigits = 2))
+        assertEquals("1,234", decimal("1234.4").toFormattedString(maximumFractionDigits = 0))
+        assertEquals("1234.5", decimal("1234.5").toFormattedString(maximumFractionDigits = 2, groupingSeparator = null))
+        assertEquals("1234.50", decimal("1234.5").toFormattedString(maximumFractionDigits = 2, groupingSeparator = null, minimumFractionDigits = 2))
+        assertEquals("1.234,57", decimal("1234.567").toFormattedString(maximumFractionDigits = 2, decimalSeparator = ',', groupingSeparator = '.'))
+        assertEquals("-9 876 543,2", decimal("-9876543.21").toFormattedString(maximumFractionDigits = 1, decimalSeparator = ',', groupingSeparator = ' '))
+        assertEquals("1.23", decimal("1.239").toFormattedString(maximumFractionDigits = 2, rounding = Rounding.DOWN))
+        assertEquals("1.24", decimal("1.231").toFormattedString(maximumFractionDigits = 2, rounding = Rounding.UP))
+        assertEquals("1,235", decimal("1234.999").toFormattedString(maximumFractionDigits = 2))
 
-        assertFailsWith<IllegalArgumentException> { decimal("1").toFormattedString(scale = -1) }
-        assertFailsWith<IllegalArgumentException> { decimal("1").toFormattedString(scale = 32768) }
-        assertFailsWith<IllegalArgumentException> { decimal("1").toFormattedString(scale = 2, decimalSeparator = ',', groupingSeparator = ',') }
+        assertFailsWith<IllegalArgumentException> { decimal("1").toFormattedString(maximumFractionDigits = -1) }
+        assertFailsWith<IllegalArgumentException> { decimal("1").toFormattedString(maximumFractionDigits = 32768) }
+        assertFailsWith<IllegalArgumentException> { decimal("1").toFormattedString(maximumFractionDigits = 2, minimumFractionDigits = -1) }
+        assertFailsWith<IllegalArgumentException> { decimal("1").toFormattedString(maximumFractionDigits = 2, minimumFractionDigits = 3) }
+        assertFailsWith<IllegalArgumentException> { decimal("1").toFormattedString(maximumFractionDigits = 2, decimalSeparator = ',', groupingSeparator = ',') }
     }
 
     @Test
     fun `formats negative values with explicit rounding modes`() {
-        assertEquals("-1.23", decimal("-1.239").toFormattedString(scale = 2, rounding = Rounding.DOWN))
-        assertEquals("-1.24", decimal("-1.231").toFormattedString(scale = 2, rounding = Rounding.UP))
-        assertEquals("-1.24", decimal("-1.235").toFormattedString(scale = 2, rounding = Rounding.HALF_UP))
-        assertEquals("-1,000", decimal("-999.5").toFormattedString(scale = 0, rounding = Rounding.HALF_UP))
+        assertEquals("-1.23", decimal("-1.239").toFormattedString(maximumFractionDigits = 2, rounding = Rounding.DOWN))
+        assertEquals("-1.24", decimal("-1.231").toFormattedString(maximumFractionDigits = 2, rounding = Rounding.UP))
+        assertEquals("-1.24", decimal("-1.235").toFormattedString(maximumFractionDigits = 2, rounding = Rounding.HALF_UP))
+        assertEquals("-1,000", decimal("-999.5").toFormattedString(maximumFractionDigits = 0, rounding = Rounding.HALF_UP))
     }
 
     @Test
@@ -310,11 +314,12 @@ class DecimalTest {
         val value = decimal("0.123456789123456789")
         val carry = decimal("999999999999999999.999999999999999999")
 
-        assertEquals("0.123456789123456789", value.toFormattedString(scale = 18, rounding = Rounding.DOWN, groupingSeparator = null))
-        assertEquals("0.123456789123456789", value.toFormattedString(scale = 18, rounding = Rounding.UP, groupingSeparator = null))
-        assertEquals("0.123456789123456789", value.toFormattedString(scale = 18, rounding = Rounding.HALF_UP, groupingSeparator = null))
-        assertEquals("1,000,000,000,000,000,000.00", carry.toFormattedString(scale = 2, rounding = Rounding.HALF_UP))
-        assertEquals("999,999,999,999,999,999.99", carry.toFormattedString(scale = 2, rounding = Rounding.DOWN))
+        assertEquals("0.123456789123456789", value.toFormattedString(maximumFractionDigits = 18, rounding = Rounding.DOWN, groupingSeparator = null))
+        assertEquals("0.123456789123456789", value.toFormattedString(maximumFractionDigits = 18, rounding = Rounding.UP, groupingSeparator = null))
+        assertEquals("0.123456789123456789", value.toFormattedString(maximumFractionDigits = 18, rounding = Rounding.HALF_UP, groupingSeparator = null))
+        assertEquals("1,000,000,000,000,000,000", carry.toFormattedString(maximumFractionDigits = 2, rounding = Rounding.HALF_UP))
+        assertEquals("1,000,000,000,000,000,000.00", carry.toFormattedString(maximumFractionDigits = 2, rounding = Rounding.HALF_UP, minimumFractionDigits = 2))
+        assertEquals("999,999,999,999,999,999.99", carry.toFormattedString(maximumFractionDigits = 2, rounding = Rounding.DOWN))
     }
 
     @Test
@@ -389,7 +394,7 @@ class DecimalTest {
             val unit = total.divide(quantity, scale = 2, rounding = Rounding.HALF_UP)
 
             assertPlain(price.toPlainString(), unit)
-            assertEquals(price.toFormattedString(scale = 2), unit.toFormattedString(scale = 2))
+            assertEquals(price.toFormattedString(maximumFractionDigits = 2), unit.toFormattedString(maximumFractionDigits = 2))
         }
     }
 
@@ -405,7 +410,7 @@ class DecimalTest {
             val value = Decimal.fromInt(i * 12345).movePointLeft(2)
             separatorPairs.forEach { (decimalSeparator, groupingSeparator, groupingSeparators) ->
                 val formatted = value.toFormattedString(
-                    scale = 2,
+                    maximumFractionDigits = 2,
                     decimalSeparator = decimalSeparator,
                     groupingSeparator = groupingSeparator,
                 )
@@ -485,8 +490,8 @@ class DecimalTest {
         val ethBalance = decimal("1234.890123456789")
         val btcBalance = decimal("0.123456789")
 
-        assertEquals("1,234.890123456789", ethBalance.toFormattedString(scale = 12, rounding = Rounding.DOWN))
-        assertEquals("0.12345679", btcBalance.toFormattedString(scale = 8, rounding = Rounding.HALF_UP, groupingSeparator = null))
+        assertEquals("1,234.890123456789", ethBalance.toFormattedString(maximumFractionDigits = 12, rounding = Rounding.DOWN))
+        assertEquals("0.12345679", btcBalance.toFormattedString(maximumFractionDigits = 8, rounding = Rounding.HALF_UP, groupingSeparator = null))
     }
 
     @Test

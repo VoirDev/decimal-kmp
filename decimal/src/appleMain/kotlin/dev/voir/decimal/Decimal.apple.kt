@@ -292,24 +292,30 @@ actual class Decimal internal constructor(
     /**
      * Converts to a human-friendly string.
      *
-     * @param scale Fractional digits to display.
+     * @param maximumFractionDigits Maximum fractional digits to display.
      * @param rounding Rounding mode.
      * @param decimalSeparator Decimal separator.
      * @param groupingSeparator Optional grouping separator.
+     * @param minimumFractionDigits Minimum fractional digits to display.
      */
     actual fun toFormattedString(
-        scale: Int,
+        maximumFractionDigits: Int,
+        minimumFractionDigits: Int,
         rounding: Rounding,
         decimalSeparator: Char,
         groupingSeparator: Char?,
     ): String {
-        requirePortableScale(scale)
+        requirePortableScale(maximumFractionDigits)
+        requirePortableScale(minimumFractionDigits)
+        require(minimumFractionDigits <= maximumFractionDigits) {
+            "Minimum fraction digits must be at most maximumFractionDigits."
+        }
         require(groupingSeparator == null || groupingSeparator != decimalSeparator) {
             "Decimal separator cannot also be the grouping separator."
         }
 
-        return setScale(scale, rounding).toPlainString()
-            .toFormattedPlainDecimalText(scale, decimalSeparator, groupingSeparator)
+        return setScale(maximumFractionDigits, rounding).toPlainString()
+            .toFormattedPlainDecimalText(minimumFractionDigits, decimalSeparator, groupingSeparator)
     }
 
     /**
@@ -357,7 +363,11 @@ private fun checked(value: NSDecimalNumber): Decimal {
  * @param rounding Rounding mode.
  * @param value Value used to choose sign-aware rounding behavior.
  */
-private fun roundingHandler(scale: Int, rounding: Rounding, value: NSDecimalNumber): NSDecimalNumberHandler {
+private fun roundingHandler(
+    scale: Int,
+    rounding: Rounding,
+    value: NSDecimalNumber
+): NSDecimalNumberHandler {
     return NSDecimalNumberHandler.decimalNumberHandlerWithRoundingMode(
         roundingMode = rounding.toNativeRoundingMode(value.stringValue.startsWith("-")),
         scale = scale.toShort(),
@@ -521,7 +531,7 @@ private fun incrementUnsignedDecimalText(integerPart: String, fractionPart: Stri
  * Joins unsigned integer and fraction text, then canonicalizes insignificant zeros.
  *
  * The public plain string is canonical, while callers that need fixed display precision should use
- * toFormattedString(scale = ...).
+ * toFormattedString(maximumFractionDigits = ...).
  *
  * @param integerPart Digits before the decimal point.
  * @param fractionPart Digits after the decimal point.
@@ -536,12 +546,12 @@ private fun joinUnsignedDecimalText(integerPart: String, fractionPart: String): 
 /**
  * Formats canonical plain decimal text without routing through Foundation formatters.
  *
- * @param scale Fractional digits to include in the result.
+ * @param minimumFractionDigits Minimum fractional digits to include in the result.
  * @param decimalSeparator Separator used for the fractional part.
  * @param groupingSeparator Optional separator inserted every three integer digits.
  */
 private fun String.toFormattedPlainDecimalText(
-    scale: Int,
+    minimumFractionDigits: Int,
     decimalSeparator: Char,
     groupingSeparator: Char?,
 ): String {
@@ -549,9 +559,9 @@ private fun String.toFormattedPlainDecimalText(
     val unsigned = if (isNegative || startsWith("+")) drop(1) else this
     val parts = unsigned.split('.', limit = 2)
     val integerPart = parts[0]
-    val fractionPart = parts.getOrElse(1) { "" }.padEnd(scale, '0')
+    val fractionPart = parts.getOrElse(1) { "" }.padEnd(minimumFractionDigits, '0')
     val groupedInteger = integerPart.toGroupedIntegerText(groupingSeparator)
-    val formattedUnsigned = if (scale == 0) {
+    val formattedUnsigned = if (fractionPart.isEmpty()) {
         groupedInteger
     } else {
         "$groupedInteger$decimalSeparator$fractionPart"
@@ -594,7 +604,10 @@ private fun String.toGroupedIntegerText(groupingSeparator: Char?): String {
  * @param places Number of decimal places to move.
  * @param toLeft Whether the decimal point moves left instead of right.
  */
-private fun NSDecimalNumber.decimalNumberByMovingPoint(places: Int, toLeft: Boolean): NSDecimalNumber {
+private fun NSDecimalNumber.decimalNumberByMovingPoint(
+    places: Int,
+    toLeft: Boolean
+): NSDecimalNumber {
     var result = this
     var remaining = places
 

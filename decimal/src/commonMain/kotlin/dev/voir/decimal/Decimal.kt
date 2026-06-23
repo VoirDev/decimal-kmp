@@ -194,13 +194,15 @@ expect class Decimal {
     /**
      * Formats this value for human display.
      *
-     * @param scale Fractional digits to display.
+     * @param maximumFractionDigits Maximum fractional digits to display.
+     * @param minimumFractionDigits Minimum fractional digits to display.
      * @param rounding Rounding mode used before formatting.
      * @param decimalSeparator Separator used for the fractional part.
      * @param groupingSeparator Optional separator inserted every three integer digits.
      */
     fun toFormattedString(
-        scale: Int,
+        maximumFractionDigits: Int,
+        minimumFractionDigits: Int = 0,
         rounding: Rounding = Rounding.HALF_UP,
         decimalSeparator: Char = '.',
         groupingSeparator: Char? = ',',

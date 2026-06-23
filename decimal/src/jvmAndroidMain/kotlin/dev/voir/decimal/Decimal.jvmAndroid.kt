@@ -6,7 +6,7 @@ import java.math.MathContext
 import java.math.RoundingMode
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
-import java.util.Locale
+import java.util.*
 
 /**
  * Android and JVM decimal implementation backed by `java.math.BigDecimal`.
@@ -282,25 +282,31 @@ actual class Decimal internal constructor(
     /**
      * Converts to a human-friendly string.
      *
-     * @param scale Fractional digits to display.
+     * @param maximumFractionDigits Maximum fractional digits to display.
+     * @param minimumFractionDigits Minimum fractional digits to display.
      * @param rounding Rounding mode.
      * @param decimalSeparator Decimal separator.
      * @param groupingSeparator Optional grouping separator.
      */
     actual fun toFormattedString(
-        scale: Int,
+        maximumFractionDigits: Int,
+        minimumFractionDigits: Int,
         rounding: Rounding,
         decimalSeparator: Char,
         groupingSeparator: Char?,
     ): String {
-        requirePortableScale(scale)
+        requirePortableScale(maximumFractionDigits)
+        requirePortableScale(minimumFractionDigits)
+        require(minimumFractionDigits <= maximumFractionDigits) {
+            "Minimum fraction digits must be at most maximumFractionDigits."
+        }
         require(groupingSeparator == null || groupingSeparator != decimalSeparator) {
             "Decimal separator cannot also be the grouping separator."
         }
 
         return decimalFormatter(decimalSeparator, groupingSeparator).apply {
-            minimumFractionDigits = scale
-            maximumFractionDigits = scale
+            this.minimumFractionDigits = minimumFractionDigits
+            this.maximumFractionDigits = maximumFractionDigits
             roundingMode = rounding.toJvmRoundingMode()
         }.format(value)
     }
