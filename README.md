@@ -67,7 +67,7 @@ val quantity = Decimal.fromInt(3)
 val total = price * quantity
 
 println(total.toPlainString()) // 59.97
-println(total.toFormattedString(scale = 2)) // 59.97
+println(total.toFormattedString(maximumFractionDigits = 2)) // 59.97
 
 val third = decimal("1").divide(decimal("3"), scale = 6, rounding = Rounding.HALF_UP)
 println(third.toPlainString()) // 0.333333
@@ -182,10 +182,12 @@ import dev.voir.decimal.decimal
 val value = decimal("1234.567")
 
 value.toPlainString() // 1234.567
-value.toFormattedString(scale = 2) // 1,234.57
-value.toFormattedString(scale = 2, groupingSeparator = null) // 1234.57
-value.toFormattedString(scale = 2, decimalSeparator = ',', groupingSeparator = '.') // 1.234,57
-value.toFormattedString(scale = 2, rounding = Rounding.DOWN) // 1,234.56
+value.toFormattedString(maximumFractionDigits = 2) // 1,234.57
+value.toFormattedString(maximumFractionDigits = 2, groupingSeparator = null) // 1234.57
+value.toFormattedString(maximumFractionDigits = 2, decimalSeparator = ',', groupingSeparator = '.') // 1.234,57
+value.toFormattedString(maximumFractionDigits = 2, rounding = Rounding.DOWN) // 1,234.56
+decimal("1234.5").toFormattedString(maximumFractionDigits = 2) // 1,234.5
+decimal("1234.5").toFormattedString(maximumFractionDigits = 2, minimumFractionDigits = 2) // 1,234.50
 ```
 
 ## Base-Unit Conversions
