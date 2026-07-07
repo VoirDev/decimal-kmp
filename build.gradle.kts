@@ -6,7 +6,7 @@ plugins {
     alias(libs.plugins.serialization) apply false
 }
 
-val projectVersion = providers.gradleProperty("releaseVersion").orElse("1.0.1").get()
+val projectVersion = providers.gradleProperty("releaseVersion").orElse("1.0.2").get()
 
 allprojects {
     group = "dev.voir"
