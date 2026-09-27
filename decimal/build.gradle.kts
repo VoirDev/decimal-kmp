@@ -7,12 +7,31 @@ plugins {
 
 kotlin {
     jvmToolchain(21)
+    // Library code must declare visibility explicitly so nothing becomes public by accident.
+    explicitApi()
 
-    jvm()
+    compilerOptions {
+        // Decimal is an expect/actual class; opt in to the Beta feature instead of warning.
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
+
+    @OptIn(org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation::class)
+    abiValidation()
+
+    jvm {
+        compilerOptions {
+            // Build with JDK 21 but emit bytecode that consumers on Java 11 and newer can load.
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+            freeCompilerArgs.add("-Xjdk-release=11")
+        }
+    }
     android {
         namespace = "dev.voir.decimal"
         compileSdk = 37
         minSdk = 23
+
+        // Run the common tests on the Android runtime too, not only on the JVM.
+        withHostTest {}
     }
     iosX64()
     iosArm64()

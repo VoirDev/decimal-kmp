@@ -1,6 +1,6 @@
 [versions]
-agp = "9.2.1"
-kotlin = "2.4.0" # https://kotlinlang.org/docs/releases.html
+agp = "9.4.1"
+kotlin = "2.4.20" # https://kotlinlang.org/docs/releases.html
 kotlinx-serialization = "1.11.0" # https://github.com/Kotlin/kotlinx.serialization
 
 [libraries]

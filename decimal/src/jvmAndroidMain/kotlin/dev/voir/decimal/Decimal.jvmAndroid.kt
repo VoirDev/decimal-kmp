@@ -15,45 +15,30 @@ import java.util.*
  * 38 significant digits and a decimal exponent from -128 through 127.
  */
 @Serializable(with = DecimalSerializer::class)
-actual class Decimal internal constructor(
+public actual class Decimal internal constructor(
     /**
      * Native decimal value stored without exposing BigDecimal-specific behavior in common code.
      */
     private val value: BigDecimal,
-) {
+) : Comparable<Decimal> {
     /**
      * Creates JVM and Android decimal values.
      */
-    actual companion object {
-        private val DECIMAL_RE = Regex("""^[+-]?\d+(\.\d+)?$""")
-        private val INTEGER_RE = Regex("""^[+-]?\d+$""")
+    public actual companion object {
+        /**
+         * Creates a decimal from plain text.
+         *
+         * @param value Decimal text accepted by the common parser contract.
+         */
+        public actual fun parse(value: String): Decimal = of(value)
 
         /**
          * Creates a decimal from plain text.
          *
          * @param value Decimal text accepted by the common parser contract.
          */
-        actual fun parse(value: String): Decimal = of(value)
-
-        /**
-         * Creates a decimal from plain text.
-         *
-         * @param value Decimal text accepted by the common parser contract.
-         */
-        actual fun of(value: String): Decimal {
-            val s = value.trim()
-            if (s.isEmpty()) throw IllegalArgumentException("Empty decimal string")
-            if (!DECIMAL_RE.matches(s)) throw IllegalArgumentException("Invalid decimal string: $value")
-
-            val v = try {
-                BigDecimal(s, MathContext.UNLIMITED)
-            } catch (e: Exception) {
-                // Regex validation should prevent this, but keep parser failures contextual.
-                throw IllegalArgumentException("Invalid decimal string: $value", e)
-            }
-
-            return checked(v)
-        }
+        public actual fun of(value: String): Decimal =
+            fromValidatedText(parsePlainDecimalText(value, integerOnly = false))
 
         /**
          * Creates a decimal from formatted text.
@@ -62,22 +47,38 @@ actual class Decimal internal constructor(
          * @param decimalSeparator Separator used for the fractional part.
          * @param groupingSeparators Candidate separators used for digit grouping.
          */
-        actual fun parseFormatted(
+        public actual fun parseFormatted(
             value: String,
             decimalSeparator: Char,
             groupingSeparators: Set<Char>
-        ): Decimal {
-            val s = value.trim()
-            if (s.isEmpty()) throw IllegalArgumentException("Empty formatted decimal string")
+        ): Decimal = fromValidatedText(parseFormattedDecimalText(value, decimalSeparator, groupingSeparators))
 
-            val groupingOptions = listOf(null) + groupingSeparators.minus(decimalSeparator).sorted()
-            for (groupingSeparator in groupingOptions) {
-                if (!isFormattedDecimalText(s, decimalSeparator, groupingSeparator)) continue
+        /**
+         * Creates a decimal from plain text, or returns `null` when it is not accepted.
+         *
+         * @param value Decimal text accepted by the common parser contract.
+         */
+        public actual fun parseOrNull(value: String): Decimal? = try {
+            of(value)
+        } catch (_: IllegalArgumentException) {
+            null
+        }
 
-                return of(s.toPlainDecimalText(decimalSeparator, groupingSeparator))
-            }
-
-            throw IllegalArgumentException("Invalid formatted decimal string: $value")
+        /**
+         * Creates a decimal from formatted text, or returns `null` when it is not accepted.
+         *
+         * @param value Formatted decimal text.
+         * @param decimalSeparator Separator used for the fractional part.
+         * @param groupingSeparators Candidate separators used for digit grouping.
+         */
+        public actual fun parseFormattedOrNull(
+            value: String,
+            decimalSeparator: Char,
+            groupingSeparators: Set<Char>,
+        ): Decimal? = try {
+            parseFormatted(value, decimalSeparator, groupingSeparators)
+        } catch (_: IllegalArgumentException) {
+            null
         }
 
         /**
@@ -85,63 +86,65 @@ actual class Decimal internal constructor(
          *
          * @param value Integer text.
          */
-        actual fun ofInteger(value: String): Decimal {
-            val s = value.trim()
-            if (s.isEmpty()) throw IllegalArgumentException("Empty integer string")
-
-            if (!INTEGER_RE.matches(s)) throw IllegalArgumentException("Invalid integer string: $value")
-
-            val v = try {
-                BigDecimal(s, MathContext.UNLIMITED)
-            } catch (e: Exception) {
-                throw IllegalArgumentException("Invalid integer string: $value", e)
-            }
-
-            return checked(v)
-        }
+        public actual fun ofInteger(value: String): Decimal =
+            fromValidatedText(parsePlainDecimalText(value, integerOnly = true))
 
         /**
          * Creates a decimal from an integer value.
          *
          * @param value Integer value.
          */
-        actual fun fromInt(value: Int): Decimal = checked(BigDecimal.valueOf(value.toLong()))
+        public actual fun fromInt(value: Int): Decimal = checked(BigDecimal.valueOf(value.toLong()))
 
         /**
          * Creates a decimal from a long value.
          *
          * @param value Long value.
          */
-        actual fun fromLong(value: Long): Decimal = checked(BigDecimal.valueOf(value))
+        public actual fun fromLong(value: Long): Decimal = checked(BigDecimal.valueOf(value))
 
         /**
          * Creates a decimal from a finite double value.
          *
          * @param value Double value.
          */
-        actual fun fromDouble(value: Double): Decimal {
-            require(value.isFinite()) { "Decimal cannot be created from a non-finite Double." }
+        public actual fun fromDouble(value: Double): Decimal {
+            requireFiniteDouble(value)
             return checked(BigDecimal.valueOf(value))
         }
 
         /**
          * Returns zero.
          */
-        actual fun zero(): Decimal = checked(BigDecimal.ZERO)
+        public actual fun zero(): Decimal = checked(BigDecimal.ZERO)
 
         /**
          * Returns one.
          */
-        actual fun one(): Decimal = checked(BigDecimal.ONE)
+        public actual fun one(): Decimal = checked(BigDecimal.ONE)
+
+        /**
+         * Creates a decimal from canonical text that already passed the common parser.
+         *
+         * Integer text can still end in zeros, which are stripped so every stored value has the
+         * same representation, and therefore the same hash code, as equal arithmetic results.
+         *
+         * @param text Canonical plain decimal text inside the portable envelope.
+         */
+        private fun fromValidatedText(text: String): Decimal = Decimal(BigDecimal(text).stripTrailingZeros())
 
         /**
          * Creates a decimal after enforcing Apple-compatible numeric limits.
          *
+         * Stored values never keep trailing zeros, so their scale is the number of meaningful
+         * fractional digits and later operations never carry large zero padding.
+         *
          * @param value Native value to wrap.
          */
         private fun checked(value: BigDecimal): Decimal {
-            value.requireAppleCompatible()
-            return Decimal(value)
+            val canonical = value.stripTrailingZeros()
+            canonical.requireAppleCompatible()
+            return Decimal(canonical)
         }
     }
 
@@ -150,7 +153,7 @@ actual class Decimal internal constructor(
      *
      * @param other Value to add.
      */
-    actual fun add(other: Decimal): Decimal =
+    public actual fun add(other: Decimal): Decimal =
         binary(other) { left, right -> left.add(right, DECIMAL_CONTEXT) }
 
     /**
@@ -158,14 +161,14 @@ actual class Decimal internal constructor(
      *
      * @param other Value to add.
      */
-    actual operator fun plus(other: Decimal): Decimal = add(other)
+    public actual operator fun plus(other: Decimal): Decimal = add(other)
 
     /**
      * Subtracts another decimal.
      *
      * @param other Value to subtract.
      */
-    actual fun subtract(other: Decimal): Decimal =
+    public actual fun subtract(other: Decimal): Decimal =
         binary(other) { left, right -> left.subtract(right, DECIMAL_CONTEXT) }
 
     /**
@@ -173,14 +176,14 @@ actual class Decimal internal constructor(
      *
      * @param other Value to subtract.
      */
-    actual operator fun minus(other: Decimal): Decimal = subtract(other)
+    public actual operator fun minus(other: Decimal): Decimal = subtract(other)
 
     /**
      * Multiplies by another decimal.
      *
      * @param other Multiplier.
      */
-    actual fun multiply(other: Decimal): Decimal =
+    public actual fun multiply(other: Decimal): Decimal =
         binary(other) { left, right -> left.multiply(right, DECIMAL_CONTEXT) }
 
     /**
@@ -188,14 +191,14 @@ actual class Decimal internal constructor(
      *
      * @param other Multiplier.
      */
-    actual operator fun times(other: Decimal): Decimal = multiply(other)
+    public actual operator fun times(other: Decimal): Decimal = multiply(other)
 
     /**
      * Multiplies by an integer string.
      *
      * @param integer Integer multiplier.
      */
-    actual fun multiplyInteger(integer: String): Decimal = multiply(ofInteger(integer))
+    public actual fun multiplyInteger(integer: String): Decimal = multiply(ofInteger(integer))
 
     /**
      * Divides by another decimal with explicit rounding.
@@ -204,12 +207,18 @@ actual class Decimal internal constructor(
      * @param scale Fractional digits to keep.
      * @param rounding Rounding mode.
      */
-    actual fun divide(other: Decimal, scale: Int, rounding: Rounding): Decimal {
+    public actual fun divide(other: Decimal, scale: Int, rounding: Rounding): Decimal {
         requirePortableScale(scale)
+        if (other.value.signum() == 0) throw divisionByZero(toPlainString())
+        if (value.signum() == 0) return zero()
+
         return binary(other) { left, right ->
+            val keptExponent = divisionRoundingExponent(left.quotientLeadingExponent(right), scale)
+
+            // A negative BigDecimal scale keeps digits above the units place, so this rounds once.
             left.divide(
                 right,
-                scale,
+                -keptExponent,
                 rounding.toJvmRoundingMode()
             )
         }
@@ -220,7 +229,7 @@ actual class Decimal internal constructor(
      *
      * @param other Divisor.
      */
-    actual operator fun div(other: Decimal): Decimal =
+    public actual operator fun div(other: Decimal): Decimal =
         divide(other, scale = 18, rounding = Rounding.HALF_UP)
 
     /**
@@ -230,7 +239,7 @@ actual class Decimal internal constructor(
      * @param scale Fractional digits to keep.
      * @param rounding Rounding mode.
      */
-    actual fun divideInteger(integer: String, scale: Int, rounding: Rounding): Decimal {
+    public actual fun divideInteger(integer: String, scale: Int, rounding: Rounding): Decimal {
         return divide(ofInteger(integer), scale, rounding)
     }
 
@@ -239,8 +248,8 @@ actual class Decimal internal constructor(
      *
      * @param places Number of places to move.
      */
-    actual fun movePointLeft(places: Int): Decimal {
-        require(places >= 0) { "Places must be non-negative." }
+    public actual fun movePointLeft(places: Int): Decimal {
+        requirePortablePlaces(places)
         requirePortablePointMove(toPlainString(), places, toLeft = true)
         return unary { it.movePointLeft(places) }
     }
@@ -250,8 +259,8 @@ actual class Decimal internal constructor(
      *
      * @param places Number of places to move.
      */
-    actual fun movePointRight(places: Int): Decimal {
-        require(places >= 0) { "Places must be non-negative." }
+    public actual fun movePointRight(places: Int): Decimal {
+        requirePortablePlaces(places)
         requirePortablePointMove(toPlainString(), places, toLeft = false)
         return unary { it.movePointRight(places) }
     }
@@ -262,20 +271,23 @@ actual class Decimal internal constructor(
      * @param scale Fractional digits to keep.
      * @param rounding Rounding mode.
      */
-    actual fun setScale(scale: Int, rounding: Rounding): Decimal {
+    public actual fun setScale(scale: Int, rounding: Rounding): Decimal {
         requirePortableScale(scale)
+        // Stored values have no trailing zeros; padding up to a large scale only to strip it
+        // again in checked() is quadratic in the scale.
+        if (value.scale() <= scale) return this
         return unary { it.setScale(scale, rounding.toJvmRoundingMode()) }
     }
 
     /**
      * Converts to plain string.
      */
-    actual fun toPlainString(): String = value.stripTrailingZeros().toPlainString()
+    public actual fun toPlainString(): String = value.toPlainString()
 
     /**
      * Converts to integer string.
      */
-    actual fun toIntegerString(): String = value.setScale(0, RoundingMode.HALF_UP)
+    public actual fun toIntegerString(): String = value.setScale(0, RoundingMode.HALF_UP)
         .toBigIntegerExact()
         .toString()
 
@@ -288,45 +300,69 @@ actual class Decimal internal constructor(
      * @param decimalSeparator Decimal separator.
      * @param groupingSeparator Optional grouping separator.
      */
-    actual fun toFormattedString(
+    public actual fun toFormattedString(
         maximumFractionDigits: Int,
         minimumFractionDigits: Int,
         rounding: Rounding,
         decimalSeparator: Char,
         groupingSeparator: Char?,
     ): String {
-        requirePortableScale(maximumFractionDigits)
-        requirePortableScale(minimumFractionDigits)
-        require(minimumFractionDigits <= maximumFractionDigits) {
-            "Minimum fraction digits must be at most maximumFractionDigits."
-        }
-        require(groupingSeparator == null || groupingSeparator != decimalSeparator) {
-            "Decimal separator cannot also be the grouping separator."
-        }
+        requireFormatArguments(maximumFractionDigits, minimumFractionDigits, decimalSeparator, groupingSeparator)
+
+        // DecimalFormat keeps the sign of negative values that round to zero, printing "-0".
+        // Round first; stored zero has no sign, so those values format as zero like Apple targets.
+        val displayed = setScale(maximumFractionDigits, rounding).value
 
         return decimalFormatter(decimalSeparator, groupingSeparator).apply {
             this.minimumFractionDigits = minimumFractionDigits
             this.maximumFractionDigits = maximumFractionDigits
             roundingMode = rounding.toJvmRoundingMode()
-        }.format(value)
+        }.format(displayed)
     }
 
     /**
      * Returns the absolute value.
      */
-    actual fun abs(): Decimal = unary { it.abs() }
+    public actual fun abs(): Decimal = unary { it.abs() }
+
+    /**
+     * Returns the negated value.
+     */
+    public actual fun negate(): Decimal = unary { it.negate() }
+
+    /**
+     * Returns the negated value.
+     */
+    public actual operator fun unaryMinus(): Decimal = negate()
+
+    /**
+     * Returns the sign of this value.
+     */
+    public actual fun signum(): Int = value.signum()
+
+    /**
+     * Returns whether this value is zero.
+     */
+    public actual fun isZero(): Boolean = value.signum() == 0
+
+    /**
+     * Compares decimal values by numeric value.
+     *
+     * @param other Value to compare with.
+     */
+    actual override fun compareTo(other: Decimal): Int = value.compareTo(other.value)
 
     /**
      * Converts this value to debug text.
      */
-    override fun toString(): String = toPlainString()
+    actual override fun toString(): String = toPlainString()
 
     /**
      * Compares decimal values by numeric value.
      *
      * @param other Candidate value.
      */
-    override fun equals(other: Any?): Boolean {
+    actual override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is Decimal) return false
         return value.compareTo(other.value) == 0
@@ -335,7 +371,7 @@ actual class Decimal internal constructor(
     /**
      * Returns a hash code for this decimal.
      */
-    override fun hashCode(): Int = value.stripTrailingZeros().hashCode()
+    actual override fun hashCode(): Int = value.hashCode()
 
     /**
      * Applies a unary operation.
@@ -370,18 +406,51 @@ private fun Rounding.toJvmRoundingMode(): RoundingMode = when (this) {
     Rounding.HALF_UP -> RoundingMode.HALF_UP
     Rounding.DOWN -> RoundingMode.DOWN
     Rounding.UP -> RoundingMode.UP
+    Rounding.HALF_EVEN -> RoundingMode.HALF_EVEN
+    Rounding.FLOOR -> RoundingMode.FLOOR
+    Rounding.CEILING -> RoundingMode.CEILING
 }
+
+/**
+ * Returns the base-10 exponent of the most significant digit of `this / divisor`.
+ *
+ * Both values must be non-zero.
+ *
+ * @param divisor Non-zero divisor.
+ */
+private fun BigDecimal.quotientLeadingExponent(divisor: BigDecimal): Int {
+    val dividendLeadingExponent = leadingExponent()
+    val divisorLeadingExponent = divisor.leadingExponent()
+
+    // Compare both magnitudes scaled into [1, 10); a smaller dividend loses one leading place.
+    val dividendIsSmaller = abs().scaleByPowerOfTen(-dividendLeadingExponent) <
+        divisor.abs().scaleByPowerOfTen(-divisorLeadingExponent)
+
+    return dividendLeadingExponent - divisorLeadingExponent - if (dividendIsSmaller) 1 else 0
+}
+
+/**
+ * Returns the base-10 exponent of this non-zero value's most significant digit.
+ */
+private fun BigDecimal.leadingExponent(): Int = precision() - scale() - 1
 
 /**
  * Requires that a JVM value can also be represented by `NSDecimalNumber`.
  *
  * Apple decimals store up to 38 significant decimal digits and a base-10 exponent in the range
  * -128 through 127. `BigDecimal` can exceed both limits, so JVM/Android checks every boundary.
+ * This value must have no trailing zeros, so its precision and scale describe the significant
+ * digits directly.
  */
 private fun BigDecimal.requireAppleCompatible() {
     if (signum() == 0) return
 
-    requirePortableDecimalText(stripTrailingZeros().toPlainString())
+    require(precision() <= DECIMAL_MAX_SIGNIFICANT_DIGITS) {
+        tooManyDigitsMessage(toPlainString(), precision())
+    }
+    require(-scale() in DECIMAL_MIN_EXPONENT..DECIMAL_MAX_EXPONENT) {
+        exponentOutOfRangeMessage(toPlainString(), -scale().toLong())
+    }
 }
 
 /**

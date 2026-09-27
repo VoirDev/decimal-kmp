@@ -1,0 +1,78 @@
+// Klib ABI Dump
+// Targets: [iosArm64, iosSimulatorArm64, iosX64, macosArm64]
+// Rendering settings:
+// - Signature version: 2
+// - Show manifest properties: true
+// - Show declarations: true
+
+// Library unique name: <dev.voir:decimal>
+final enum class dev.voir.decimal/Rounding : kotlin/Enum<dev.voir.decimal/Rounding> { // dev.voir.decimal/Rounding|null[0]
+    enum entry CEILING // dev.voir.decimal/Rounding.CEILING|null[0]
+    enum entry DOWN // dev.voir.decimal/Rounding.DOWN|null[0]
+    enum entry FLOOR // dev.voir.decimal/Rounding.FLOOR|null[0]
+    enum entry HALF_EVEN // dev.voir.decimal/Rounding.HALF_EVEN|null[0]
+    enum entry HALF_UP // dev.voir.decimal/Rounding.HALF_UP|null[0]
+    enum entry UP // dev.voir.decimal/Rounding.UP|null[0]
+
+    final val entries // dev.voir.decimal/Rounding.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<dev.voir.decimal/Rounding> // dev.voir.decimal/Rounding.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): dev.voir.decimal/Rounding // dev.voir.decimal/Rounding.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<dev.voir.decimal/Rounding> // dev.voir.decimal/Rounding.values|values#static(){}[0]
+}
+
+final class dev.voir.decimal/Decimal : kotlin/Comparable<dev.voir.decimal/Decimal> { // dev.voir.decimal/Decimal|null[0]
+    final fun abs(): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.abs|abs(){}[0]
+    final fun add(dev.voir.decimal/Decimal): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.add|add(dev.voir.decimal.Decimal){}[0]
+    final fun compareTo(dev.voir.decimal/Decimal): kotlin/Int // dev.voir.decimal/Decimal.compareTo|compareTo(dev.voir.decimal.Decimal){}[0]
+    final fun div(dev.voir.decimal/Decimal): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.div|div(dev.voir.decimal.Decimal){}[0]
+    final fun divide(dev.voir.decimal/Decimal, kotlin/Int, dev.voir.decimal/Rounding): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.divide|divide(dev.voir.decimal.Decimal;kotlin.Int;dev.voir.decimal.Rounding){}[0]
+    final fun divideInteger(kotlin/String, kotlin/Int, dev.voir.decimal/Rounding): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.divideInteger|divideInteger(kotlin.String;kotlin.Int;dev.voir.decimal.Rounding){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // dev.voir.decimal/Decimal.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // dev.voir.decimal/Decimal.hashCode|hashCode(){}[0]
+    final fun isZero(): kotlin/Boolean // dev.voir.decimal/Decimal.isZero|isZero(){}[0]
+    final fun minus(dev.voir.decimal/Decimal): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.minus|minus(dev.voir.decimal.Decimal){}[0]
+    final fun movePointLeft(kotlin/Int): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.movePointLeft|movePointLeft(kotlin.Int){}[0]
+    final fun movePointRight(kotlin/Int): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.movePointRight|movePointRight(kotlin.Int){}[0]
+    final fun multiply(dev.voir.decimal/Decimal): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.multiply|multiply(dev.voir.decimal.Decimal){}[0]
+    final fun multiplyInteger(kotlin/String): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.multiplyInteger|multiplyInteger(kotlin.String){}[0]
+    final fun negate(): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.negate|negate(){}[0]
+    final fun plus(dev.voir.decimal/Decimal): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.plus|plus(dev.voir.decimal.Decimal){}[0]
+    final fun setScale(kotlin/Int, dev.voir.decimal/Rounding): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.setScale|setScale(kotlin.Int;dev.voir.decimal.Rounding){}[0]
+    final fun signum(): kotlin/Int // dev.voir.decimal/Decimal.signum|signum(){}[0]
+    final fun subtract(dev.voir.decimal/Decimal): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.subtract|subtract(dev.voir.decimal.Decimal){}[0]
+    final fun times(dev.voir.decimal/Decimal): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.times|times(dev.voir.decimal.Decimal){}[0]
+    final fun toFormattedString(kotlin/Int, kotlin/Int = ..., dev.voir.decimal/Rounding = ..., kotlin/Char = ..., kotlin/Char? = ...): kotlin/String // dev.voir.decimal/Decimal.toFormattedString|toFormattedString(kotlin.Int;kotlin.Int;dev.voir.decimal.Rounding;kotlin.Char;kotlin.Char?){}[0]
+    final fun toIntegerString(): kotlin/String // dev.voir.decimal/Decimal.toIntegerString|toIntegerString(){}[0]
+    final fun toPlainString(): kotlin/String // dev.voir.decimal/Decimal.toPlainString|toPlainString(){}[0]
+    final fun toString(): kotlin/String // dev.voir.decimal/Decimal.toString|toString(){}[0]
+    final fun unaryMinus(): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.unaryMinus|unaryMinus(){}[0]
+
+    final object Companion { // dev.voir.decimal/Decimal.Companion|null[0]
+        final fun fromDouble(kotlin/Double): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.Companion.fromDouble|fromDouble(kotlin.Double){}[0]
+        final fun fromInt(kotlin/Int): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.Companion.fromInt|fromInt(kotlin.Int){}[0]
+        final fun fromLong(kotlin/Long): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.Companion.fromLong|fromLong(kotlin.Long){}[0]
+        final fun of(kotlin/String): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.Companion.of|of(kotlin.String){}[0]
+        final fun ofInteger(kotlin/String): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.Companion.ofInteger|ofInteger(kotlin.String){}[0]
+        final fun one(): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.Companion.one|one(){}[0]
+        final fun parse(kotlin/String): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.Companion.parse|parse(kotlin.String){}[0]
+        final fun parseFormatted(kotlin/String, kotlin/Char = ..., kotlin.collections/Set<kotlin/Char> = ...): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.Companion.parseFormatted|parseFormatted(kotlin.String;kotlin.Char;kotlin.collections.Set<kotlin.Char>){}[0]
+        final fun parseFormattedOrNull(kotlin/String, kotlin/Char = ..., kotlin.collections/Set<kotlin/Char> = ...): dev.voir.decimal/Decimal? // dev.voir.decimal/Decimal.Companion.parseFormattedOrNull|parseFormattedOrNull(kotlin.String;kotlin.Char;kotlin.collections.Set<kotlin.Char>){}[0]
+        final fun parseOrNull(kotlin/String): dev.voir.decimal/Decimal? // dev.voir.decimal/Decimal.Companion.parseOrNull|parseOrNull(kotlin.String){}[0]
+        final fun serializer(): kotlinx.serialization/KSerializer<dev.voir.decimal/Decimal> // dev.voir.decimal/Decimal.Companion.serializer|serializer(){}[0]
+        final fun zero(): dev.voir.decimal/Decimal // dev.voir.decimal/Decimal.Companion.zero|zero(){}[0]
+    }
+}
+
+final object dev.voir.decimal/DecimalSerializer : kotlinx.serialization/KSerializer<dev.voir.decimal/Decimal> { // dev.voir.decimal/DecimalSerializer|null[0]
+    final val descriptor // dev.voir.decimal/DecimalSerializer.descriptor|{}descriptor[0]
+        final fun <get-descriptor>(): kotlinx.serialization.descriptors/SerialDescriptor // dev.voir.decimal/DecimalSerializer.descriptor.<get-descriptor>|<get-descriptor>(){}[0]
+
+    final fun deserialize(kotlinx.serialization.encoding/Decoder): dev.voir.decimal/Decimal // dev.voir.decimal/DecimalSerializer.deserialize|deserialize(kotlinx.serialization.encoding.Decoder){}[0]
+    final fun serialize(kotlinx.serialization.encoding/Encoder, dev.voir.decimal/Decimal) // dev.voir.decimal/DecimalSerializer.serialize|serialize(kotlinx.serialization.encoding.Encoder;dev.voir.decimal.Decimal){}[0]
+}
+
+final fun (kotlin.collections/Iterable<dev.voir.decimal/Decimal>).dev.voir.decimal/sum(): dev.voir.decimal/Decimal // dev.voir.decimal/sum|sum@kotlin.collections.Iterable<dev.voir.decimal.Decimal>(){}[0]
+final fun dev.voir.decimal/decimal(kotlin/String): dev.voir.decimal/Decimal // dev.voir.decimal/decimal|decimal(kotlin.String){}[0]
+final fun dev.voir.decimal/formattedDecimal(kotlin/String, kotlin/Char = ..., kotlin.collections/Set<kotlin/Char> = ...): dev.voir.decimal/Decimal // dev.voir.decimal/formattedDecimal|formattedDecimal(kotlin.String;kotlin.Char;kotlin.collections.Set<kotlin.Char>){}[0]
+final inline fun (dev.voir.decimal/Decimal).dev.voir.decimal/transform(kotlin/Function1<dev.voir.decimal/Decimal, dev.voir.decimal/Decimal>): dev.voir.decimal/Decimal // dev.voir.decimal/transform|transform@dev.voir.decimal.Decimal(kotlin.Function1<dev.voir.decimal.Decimal,dev.voir.decimal.Decimal>){}[0]

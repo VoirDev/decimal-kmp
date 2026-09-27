@@ -1,5 +1,7 @@
 # Decimal
 
+[![Maven Central](https://img.shields.io/maven-central/v/dev.voir/decimal)](https://central.sonatype.com/artifact/dev.voir/decimal)
+
 Tiny Kotlin Multiplatform decimal numbers for money, balances, exchange rates, and other values
 that should not go through binary floating point math.
 
@@ -19,10 +21,11 @@ on `BigDecimal` platforms.
 
 ## Installation
 
-Decimal is published with the Maven coordinates:
+Decimal is published to Maven Central. Replace `<version>` with the latest version shown on the
+badge above:
 
 ```kotlin
-implementation("dev.voir:decimal:1.0.1")
+implementation("dev.voir:decimal:<version>")
 ```
 
 For Kotlin Multiplatform projects, add it to the source set that needs decimal support:
@@ -31,7 +34,7 @@ For Kotlin Multiplatform projects, add it to the source set that needs decimal s
 kotlin {
     sourceSets {
         commonMain.dependencies {
-            implementation("dev.voir:decimal:1.0.1")
+            implementation("dev.voir:decimal:<version>")
         }
     }
 }
@@ -94,7 +97,10 @@ non-zero value smaller than `1e-128` is outside the portable range.
 
 The JVM and Android implementation still uses `BigDecimal` internally, but it validates parsed
 values against these same rules and runs addition, subtraction, and multiplication with a 38-digit
-decimal context so tests do not pass on JVM and then behave differently on iOS or macOS.
+half-up decimal context so tests do not pass on JVM and then behave differently on iOS or macOS.
+On Apple targets, addition, subtraction, multiplication, and division round the exact result in
+shared Kotlin code, because Foundation truncates some results and reports overflow with Objective-C
+exceptions that terminate Kotlin/Native processes.
 
 ## Creating Values
 
@@ -121,6 +127,14 @@ val european = formattedDecimal(
 Plain decimal parsing accepts values like `123`, `-0.01`, and `+42`. It intentionally rejects
 scientific notation, incomplete decimals like `.1` or `1.`, and grouped text. Use
 `parseFormatted` or `formattedDecimal` for user-facing grouped input.
+
+For text where rejection is expected, such as a form field, use the `OrNull` variants instead of
+catching exceptions. They accept exactly the same input as `parse` and `parseFormatted`:
+
+```kotlin
+val typed = Decimal.parseOrNull(input) ?: return showError("Enter an amount like 12.50")
+val localized = Decimal.parseFormattedOrNull("1.234,56", decimalSeparator = ',', groupingSeparators = setOf('.'))
+```
 
 ## Arithmetic
 
@@ -152,15 +166,27 @@ println(value.toPlainString()) // 0.333333333333333333
 For domain logic, prefer `divide(..., scale, rounding)` so the precision and rounding policy are
 visible at the call site.
 
+Division rounds the exact quotient once. `scale` is the maximum number of fractional digits: when a
+quotient would need more than 38 significant digits, it is rounded to 38 significant digits with
+the same rounding mode instead of failing. Quotients are also never kept below `1e-128`.
+
+```kotlin
+val large = decimal("1000000000000000000000") / decimal("3")
+println(large.toPlainString()) // 333333333333333333333.33333333333333333
+```
+
 ## Rounding
 
-`Decimal` currently includes three rounding modes:
+`Decimal` includes six rounding modes, with the same meaning as `java.math.RoundingMode`:
 
-| Mode               | Behavior                                                |
-|--------------------|---------------------------------------------------------|
-| `Rounding.HALF_UP` | Round to nearest; ties round away from zero             |
-| `Rounding.DOWN`    | Drop discarded digits; move toward zero                 |
-| `Rounding.UP`      | Round away from zero if any discarded digit is non-zero |
+| Mode                 | Behavior                                                     |
+|----------------------|--------------------------------------------------------------|
+| `Rounding.HALF_UP`   | Round to nearest; ties round away from zero                  |
+| `Rounding.HALF_EVEN` | Round to nearest; ties round to the even neighbor (banker's) |
+| `Rounding.DOWN`      | Drop discarded digits; move toward zero                      |
+| `Rounding.UP`        | Round away from zero if any discarded digit is non-zero      |
+| `Rounding.FLOOR`     | Round toward negative infinity                               |
+| `Rounding.CEILING`   | Round toward positive infinity                               |
 
 ```kotlin
 import dev.voir.decimal.Rounding
@@ -169,6 +195,35 @@ import dev.voir.decimal.decimal
 decimal("1.235").setScale(2, Rounding.HALF_UP).toPlainString() // 1.24
 decimal("1.239").setScale(2, Rounding.DOWN).toPlainString()    // 1.23
 decimal("1.231").setScale(2, Rounding.UP).toPlainString()      // 1.24
+decimal("2.5").setScale(0, Rounding.HALF_EVEN).toPlainString()  // 2
+decimal("-1.231").setScale(2, Rounding.FLOOR).toPlainString()   // -1.24
+decimal("-1.239").setScale(2, Rounding.CEILING).toPlainString() // -1.23
+```
+
+New rounding modes may be added in minor releases, so give exhaustive `when` expressions over
+`Rounding` an `else` branch.
+
+## Comparing
+
+Equality, hashing, and ordering are numeric, so trailing zeros never matter. This differs from
+`BigDecimal.equals`, where `1.0` and `1.00` are not equal.
+
+```kotlin
+import dev.voir.decimal.decimal
+import dev.voir.decimal.sum
+
+decimal("1.0") == decimal("1.00") // true
+decimal("0.1") > decimal("0.09") // true
+
+val prices = listOf(decimal("4.50"), decimal("-1.25"), decimal("10"))
+prices.sorted() // [-1.25, 4.5, 10]
+prices.max() // 10
+prices.sum() // 13.25
+maxOf(decimal("2"), decimal("1.999")) // 2
+
+-decimal("1.5") // -1.5
+decimal("-0.01").signum() // -1
+decimal("0.000").isZero() // true
 ```
 
 ## Formatting
@@ -232,6 +287,31 @@ val encoded = Json.encodeToString(InvoiceLine(decimal("1234.5678")))
 println(encoded) // {"amount":"1234.5678"}
 ```
 
+## Errors
+
+Failures are regular Kotlin exceptions with the same type and message on every platform. On Apple
+targets, no Objective-C exception escapes from `Decimal`, so invalid input cannot terminate the
+process.
+
+| Exception                  | When                                                                       |
+|----------------------------|----------------------------------------------------------------------------|
+| `IllegalArgumentException` | Empty or malformed text, or a value outside the 38-digit/exponent envelope |
+| `IllegalArgumentException` | A result outside the exponent range, such as an overflowing product        |
+| `IllegalArgumentException` | An invalid argument, such as a negative scale or equal separators          |
+| `ArithmeticException`      | Division by zero                                                           |
+
+Messages name the rejected value and the limit it broke. Long input is shortened, so text from
+untrusted sources such as JSON never floods logs:
+
+```text
+Invalid decimal text "1e3": expected plain base-10 text such as 123, +42, or -0.01.
+Decimal "111111111111111111111111111111111111111" has 39 significant digits; at most 38 are supported.
+Division by zero: "-1.5" / 0.
+```
+
+When decoding JSON, `DecimalSerializer` passes these exceptions through; kotlinx.serialization's own
+`SerializationException` is also an `IllegalArgumentException`, so one `catch` covers both.
+
 ## API Overview
 
 Common factories:
@@ -240,6 +320,8 @@ Common factories:
 - `Decimal.of(value: String)`
 - `decimal(value: String)`
 - `Decimal.parseFormatted(...)`
+- `Decimal.parseOrNull(value: String)`
+- `Decimal.parseFormattedOrNull(...)`
 - `formattedDecimal(...)`
 - `Decimal.ofInteger(value: String)`
 - `Decimal.fromInt(value: Int)`
@@ -250,12 +332,14 @@ Common factories:
 
 Common operations:
 
-- `+`, `-`, `*`, `/`
-- `add`, `subtract`, `multiply`, `divide`
+- `+`, `-`, `*`, `/`, unary `-`
+- `add`, `subtract`, `multiply`, `divide`, `negate`
 - `multiplyInteger`, `divideInteger`
 - `movePointLeft`, `movePointRight`
 - `setScale`
-- `abs`
+- `abs`, `signum`, `isZero`
+- `compareTo`, `<`, `>`, and standard library helpers such as `minOf`, `maxOf`, and `sorted`
+- `Iterable<Decimal>.sum()`
 - `toPlainString`
 - `toIntegerString`
 - `toFormattedString`
@@ -269,7 +353,10 @@ Issues and pull requests are welcome. Good contributions for a small numeric lib
 - Additional Kotlin Multiplatform targets
 - Documentation improvements and real-world usage examples
 
-Please keep changes focused and include tests for behavior changes.
+Please keep changes focused and include tests for behavior changes. `./gradlew build` runs the
+common tests on JVM, Android, macOS, and the iOS simulator, plus JVM cross-checks against
+`BigDecimal`. The build also checks the public API against the dumps in `decimal/api`; when a pull
+request changes the API on purpose, run `./gradlew updateKotlinAbi` and commit the updated dumps.
 
 ## License
 
