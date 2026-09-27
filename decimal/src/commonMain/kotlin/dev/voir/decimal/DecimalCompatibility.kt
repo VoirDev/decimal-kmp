@@ -32,41 +32,35 @@ internal fun requirePortableDecimalText(value: String) {
     val descriptor = value.portableDecimalDescriptor() ?: return
 
     require(descriptor.significantDigits <= DECIMAL_MAX_SIGNIFICANT_DIGITS) {
-        "Decimal supports at most $DECIMAL_MAX_SIGNIFICANT_DIGITS significant digits."
+        tooManyDigitsMessage(value, descriptor.significantDigits)
     }
-
     require(descriptor.decimalExponent in DECIMAL_MIN_EXPONENT..DECIMAL_MAX_EXPONENT) {
-        "Decimal exponent must be between $DECIMAL_MIN_EXPONENT and $DECIMAL_MAX_EXPONENT."
+        exponentOutOfRangeMessage(value, descriptor.decimalExponent.toLong())
     }
 }
 
 /**
- * Requires that multiplying two plain decimal values cannot overflow the portable exponent range.
+ * Returns the message for a value with more significant digits than the envelope allows.
  *
- * This preflight is used before Apple multiplication so Foundation does not raise an Objective-C
- * overflow exception before Kotlin code can report a regular argument failure.
- *
- * @param left Plain decimal text for the left value.
- * @param right Plain decimal text for the right value.
+ * @param value Plain decimal text of the rejected value.
+ * @param significantDigits Significant digits the value has.
  */
-internal fun requirePortableMultiplication(left: String, right: String) {
-    val leftDescriptor = left.portableDecimalDescriptor() ?: return
-    val rightDescriptor = right.portableDecimalDescriptor() ?: return
-    val productSignificantDigits = multiplyUnsignedIntegerText(
-        leftDescriptor.significantText,
-        rightDescriptor.significantText,
-    ).length
-    val productExponent = leftDescriptor.decimalExponent +
-        rightDescriptor.decimalExponent +
-        productSignificantDigits -
-        leftDescriptor.significantDigits -
-        rightDescriptor.significantDigits +
-        1
+internal fun tooManyDigitsMessage(value: String, significantDigits: Int): String =
+    "Decimal ${value.normalizePlainDecimalText().inputPreview()} has $significantDigits significant " +
+        "digits; at most $DECIMAL_MAX_SIGNIFICANT_DIGITS are supported."
 
-    require(productExponent in DECIMAL_MIN_EXPONENT..DECIMAL_MAX_EXPONENT) {
-        "Decimal exponent must be between $DECIMAL_MIN_EXPONENT and $DECIMAL_MAX_EXPONENT."
-    }
-}
+/**
+ * Returns the message for a value whose exponent is outside the envelope.
+ *
+ * The exponent is that of the least significant non-zero digit, so `1000` has exponent 3 and
+ * `0.01` has exponent -2.
+ *
+ * @param value Plain decimal text of the rejected value.
+ * @param exponent Exponent the value has.
+ */
+internal fun exponentOutOfRangeMessage(value: String, exponent: Long): String =
+    "Decimal ${value.normalizePlainDecimalText().inputPreview()} has exponent $exponent; the " +
+        "exponent must be between $DECIMAL_MIN_EXPONENT and $DECIMAL_MAX_EXPONENT."
 
 /**
  * Requires that moving a decimal point cannot overflow the portable exponent range.
@@ -84,7 +78,10 @@ internal fun requirePortablePointMove(value: String, places: Int, toLeft: Boolea
         if (toLeft) -places.toLong() else places.toLong()
 
     require(movedExponent in DECIMAL_MIN_EXPONENT.toLong()..DECIMAL_MAX_EXPONENT.toLong()) {
-        "Decimal exponent must be between $DECIMAL_MIN_EXPONENT and $DECIMAL_MAX_EXPONENT."
+        val direction = if (toLeft) "left" else "right"
+        "Moving the decimal point of ${value.inputPreview()} $direction by $places places gives " +
+            "exponent $movedExponent; the exponent must be between $DECIMAL_MIN_EXPONENT and " +
+            "$DECIMAL_MAX_EXPONENT."
     }
 }
 
@@ -94,10 +91,32 @@ internal fun requirePortablePointMove(value: String, places: Int, toLeft: Boolea
  * The maximum comes from the `Short`-backed scale used by Foundation rounding handlers.
  *
  * @param scale Number of fractional digits to keep or display.
+ * @param name Parameter name used in the error message.
  */
-internal fun requirePortableScale(scale: Int) {
-    require(scale >= 0) { "Scale must be non-negative." }
-    require(scale <= DECIMAL_MAX_SCALE) { "Scale must be at most $DECIMAL_MAX_SCALE." }
+internal fun requirePortableScale(scale: Int, name: String = "Scale") {
+    require(scale in 0..DECIMAL_MAX_SCALE) {
+        "$name must be between 0 and $DECIMAL_MAX_SCALE, but was $scale."
+    }
+}
+
+/**
+ * Canonicalizes plain decimal text by removing redundant sign, integer, and fractional zeros.
+ *
+ * Parsers call this before building platform values so very long zero padding never reaches
+ * `BigDecimal` or Foundation, where stripping it can be slow.
+ */
+internal fun String.normalizePlainDecimalText(): String {
+    val isNegative = startsWith("-")
+    val unsigned = when {
+        startsWith("+") || startsWith("-") -> drop(1)
+        else -> this
+    }
+    val parts = unsigned.split('.', limit = 2)
+    val integerPart = parts[0].trimStart('0').ifEmpty { "0" }
+    val fractionPart = parts.getOrElse(1) { "" }.trimEnd('0')
+    val normalized = if (fractionPart.isEmpty()) integerPart else "$integerPart.$fractionPart"
+
+    return if (isNegative && normalized != "0") "-$normalized" else normalized
 }
 
 /**
@@ -128,7 +147,7 @@ internal fun isFormattedDecimalText(
     val fractionPart = parts.getOrNull(1)
     if (integerPart.isEmpty()) return false
     if (fractionPart != null && fractionPart.isEmpty()) return false
-    if (fractionPart != null && !fractionPart.all { it.isDigit() }) return false
+    if (fractionPart != null && !fractionPart.all { it in '0'..'9' }) return false
 
     return isGroupedIntegerText(integerPart, groupingSeparator)
 }
@@ -163,14 +182,14 @@ internal fun String.toPlainDecimalText(decimalSeparator: Char, groupingSeparator
  */
 private fun isGroupedIntegerText(value: String, groupingSeparator: Char?): Boolean {
     if (groupingSeparator == null || !value.contains(groupingSeparator)) {
-        return value.all { it.isDigit() }
+        return value.all { it in '0'..'9' }
     }
 
     val groups = value.split(groupingSeparator)
     return groups.isNotEmpty() &&
         groups.first().length in 1..3 &&
-        groups.first().all { it.isDigit() } &&
-        groups.drop(1).all { group -> group.length == 3 && group.all { it.isDigit() } }
+        groups.first().all { it in '0'..'9' } &&
+        groups.drop(1).all { group -> group.length == 3 && group.all { it in '0'..'9' } }
 }
 
 /**
@@ -178,7 +197,7 @@ private fun isGroupedIntegerText(value: String, groupingSeparator: Char?): Boole
  *
  * @return Metadata for the significant coefficient, or `null` for zero.
  */
-private fun String.portableDecimalDescriptor(): PortableDecimalDescriptor? {
+internal fun String.portableDecimalDescriptor(): PortableDecimalDescriptor? {
     val unsigned = when {
         startsWith("+") || startsWith("-") -> drop(1)
         else -> this
@@ -199,40 +218,14 @@ private fun String.portableDecimalDescriptor(): PortableDecimalDescriptor? {
 }
 
 /**
- * Multiplies unsigned integer text and returns the unsigned product text.
- *
- * This tiny decimal-only multiplication avoids depending on platform big-number APIs in common
- * source while still letting compatibility checks reason about product precision.
- *
- * @param left Unsigned integer text.
- * @param right Unsigned integer text.
- */
-private fun multiplyUnsignedIntegerText(left: String, right: String): String {
-    val product = IntArray(left.length + right.length)
-
-    // Grade-school multiplication is enough here because inputs are at most 38 significant digits.
-    for (leftIndex in left.indices.reversed()) {
-        for (rightIndex in right.indices.reversed()) {
-            val productIndex = leftIndex + rightIndex + 1
-            val digitProduct = (left[leftIndex] - '0') *
-                (right[rightIndex] - '0') +
-                product[productIndex]
-            product[productIndex] = digitProduct % 10
-            product[productIndex - 1] += digitProduct / 10
-        }
-    }
-
-    return product.joinToString("").trimStart('0').ifEmpty { "0" }
-}
-
-/**
  * Portable decimal metadata derived from plain decimal text.
  *
  * @param significantText Significant decimal digits without sign, separator, or insignificant zeros.
  * @param significantDigits Count of non-zero-envelope significant digits.
- * @param decimalExponent Base-10 exponent of the most significant digit.
+ * @param decimalExponent Base-10 exponent of the least significant digit, so the value equals
+ * `significantText * 10^decimalExponent`.
  */
-private data class PortableDecimalDescriptor(
+internal data class PortableDecimalDescriptor(
     val significantText: String,
     val significantDigits: Int,
     val decimalExponent: Int,

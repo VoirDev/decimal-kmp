@@ -2,81 +2,90 @@ package dev.voir.decimal
 
 import kotlinx.serialization.Serializable
 import platform.Foundation.NSDecimalNumber
-import platform.Foundation.NSDecimalNumberHandler
-import platform.Foundation.NSRoundingMode
 
 /**
  * Apple decimal implementation backed by `Foundation.NSDecimalNumber`.
  *
  * Values are limited to 38 significant digits and a decimal exponent from -128 through 127. The
  * implementation validates inputs before calling Foundation operations that can otherwise raise
- * Objective-C exceptions.
+ * Objective-C exceptions. Addition, subtraction, multiplication, and division use shared decimal
+ * text arithmetic so results are rounded exactly like `BigDecimal` on JVM and Android.
  */
 @Serializable(with = DecimalSerializer::class)
-actual class Decimal internal constructor(
+public actual class Decimal internal constructor(
     /**
      * Native Foundation decimal value stored behind the common `Decimal` API.
      */
     private val value: NSDecimalNumber,
-) {
+) : Comparable<Decimal> {
+    /**
+     * Canonical plain text, computed once because arithmetic, comparison, and hashing use it.
+     */
+    private val plainText: String by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        value.stringValue.toFoundationPlainDecimalText()
+    }
+
     /**
      * Creates Apple decimal values.
      */
-    actual companion object {
-        private val DECIMAL_RE = Regex("""^[+-]?\d+(\.\d+)?$""")
-        private val INTEGER_RE = Regex("""^[+-]?\d+$""")
+    public actual companion object {
+        /**
+         * Creates a decimal from plain text.
+         *
+         * @param value Decimal text accepted by the common parser contract.
+         */
+        public actual fun parse(value: String): Decimal = of(value)
 
         /**
          * Creates a decimal from plain text.
          *
          * @param value Decimal text accepted by the common parser contract.
          */
-        actual fun parse(value: String): Decimal = of(value)
-
-        /**
-         * Creates a decimal from plain text.
-         *
-         * @param value Decimal text accepted by the common parser contract.
-         */
-        actual fun of(value: String): Decimal {
-            val s = value.trim()
-
-            if (s.isEmpty()) throw IllegalArgumentException("Empty decimal string")
-            if (!DECIMAL_RE.matches(s)) throw IllegalArgumentException("Invalid decimal string: $value")
-            s.requireAppleCompatibleDecimalText()
-
-            val nd = NSDecimalNumber(s)
-            if (nd == NSDecimalNumber.notANumber()) throw IllegalArgumentException("Invalid decimal string: $value")
-
-            return Decimal(nd)
-        }
+        public actual fun of(value: String): Decimal =
+            fromValidatedText(parsePlainDecimalText(value, integerOnly = false))
 
         /**
          * Creates a decimal from formatted text.
+         *
+         * Formatted input is normalized in common code instead of `NSNumberFormatter`, which can
+         * introduce precision artifacts such as turning cents into values like `...000001`.
          *
          * @param value Formatted decimal text.
          * @param decimalSeparator Separator used for the fractional part.
          * @param groupingSeparators Candidate separators used for digit grouping.
          */
-        actual fun parseFormatted(
+        public actual fun parseFormatted(
             value: String,
             decimalSeparator: Char,
             groupingSeparators: Set<Char>
-        ): Decimal {
-            val s = value.trim()
-            if (s.isEmpty()) throw IllegalArgumentException("Empty formatted decimal string")
+        ): Decimal = fromValidatedText(parseFormattedDecimalText(value, decimalSeparator, groupingSeparators))
 
-            val groupingOptions = listOf(null) + groupingSeparators.minus(decimalSeparator).sorted()
-            for (groupingSeparator in groupingOptions) {
-                if (!isFormattedDecimalText(s, decimalSeparator, groupingSeparator)) continue
+        /**
+         * Creates a decimal from plain text, or returns `null` when it is not accepted.
+         *
+         * @param value Decimal text accepted by the common parser contract.
+         */
+        public actual fun parseOrNull(value: String): Decimal? = try {
+            of(value)
+        } catch (_: IllegalArgumentException) {
+            null
+        }
 
-                // Parse formatted input by normalizing the validated text ourselves. NSNumberFormatter
-                // can introduce precision artifacts while parsing, for example turning cents into
-                // values like "...000001" on Apple targets.
-                return of(s.toPlainDecimalText(decimalSeparator, groupingSeparator))
-            }
-
-            throw IllegalArgumentException("Invalid formatted decimal string: $value")
+        /**
+         * Creates a decimal from formatted text, or returns `null` when it is not accepted.
+         *
+         * @param value Formatted decimal text.
+         * @param decimalSeparator Separator used for the fractional part.
+         * @param groupingSeparators Candidate separators used for digit grouping.
+         */
+        public actual fun parseFormattedOrNull(
+            value: String,
+            decimalSeparator: Char,
+            groupingSeparators: Set<Char>,
+        ): Decimal? = try {
+            parseFormatted(value, decimalSeparator, groupingSeparators)
+        } catch (_: IllegalArgumentException) {
+            null
         }
 
         /**
@@ -84,52 +93,57 @@ actual class Decimal internal constructor(
          *
          * @param value Integer text.
          */
-        actual fun ofInteger(value: String): Decimal {
-            val s = value.trim()
-
-            if (s.isEmpty()) throw IllegalArgumentException("Empty integer string")
-            if (!INTEGER_RE.matches(s)) throw IllegalArgumentException("Invalid integer string: $value")
-            s.requireAppleCompatibleDecimalText()
-
-            val nd = NSDecimalNumber(s)
-            if (nd == NSDecimalNumber.notANumber()) throw IllegalArgumentException("Invalid integer string: $value")
-
-            return Decimal(nd)
-        }
+        public actual fun ofInteger(value: String): Decimal =
+            fromValidatedText(parsePlainDecimalText(value, integerOnly = true))
 
         /**
          * Creates a decimal from an integer value.
          *
          * @param value Integer value.
          */
-        actual fun fromInt(value: Int): Decimal = of(value.toString())
+        public actual fun fromInt(value: Int): Decimal = of(value.toString())
 
         /**
          * Creates a decimal from a long value.
          *
          * @param value Long value.
          */
-        actual fun fromLong(value: Long): Decimal = of(value.toString())
+        public actual fun fromLong(value: Long): Decimal = of(value.toString())
 
         /**
          * Creates a decimal from a finite double value.
          *
          * @param value Double value.
          */
-        actual fun fromDouble(value: Double): Decimal {
-            require(value.isFinite()) { "Decimal cannot be created from a non-finite Double." }
-            return of(value.toString())
+        public actual fun fromDouble(value: Double): Decimal {
+            requireFiniteDouble(value)
+            // Kotlin/Native prints large and small doubles in scientific notation, such as 1.0E7.
+            return of(value.toString().expandScientificDecimalText())
         }
 
         /**
          * Returns zero.
          */
-        actual fun zero(): Decimal = of("0")
+        public actual fun zero(): Decimal = of("0")
 
         /**
          * Returns one.
          */
-        actual fun one(): Decimal = of("1")
+        public actual fun one(): Decimal = of("1")
+
+        /**
+         * Creates a decimal from canonical text that already passed the common parser.
+         *
+         * @param text Canonical plain decimal text inside the portable envelope.
+         */
+        private fun fromValidatedText(text: String): Decimal {
+            val number = NSDecimalNumber(text)
+            // The common parser already rejected malformed text, so NaN means Foundation disagrees.
+            check(number != NSDecimalNumber.notANumber()) {
+                "Foundation could not parse validated decimal text ${text.inputPreview()}."
+            }
+            return Decimal(number)
+        }
     }
 
     /**
@@ -137,53 +151,56 @@ actual class Decimal internal constructor(
      *
      * @param other Value to add.
      */
-    actual fun add(other: Decimal): Decimal = checked(value.decimalNumberByAdding(other.value))
+    public actual fun add(other: Decimal): Decimal =
+        // Foundation addition truncates digits beyond 38 instead of rounding them, so add the
+        // decimal text in common code with the same half-up rounding as JVM and Android.
+        of(addPlainDecimalText(toPlainString(), other.toPlainString()))
 
     /**
      * Adds another decimal.
      *
      * @param other Value to add.
      */
-    actual operator fun plus(other: Decimal): Decimal = add(other)
+    public actual operator fun plus(other: Decimal): Decimal = add(other)
 
     /**
      * Subtracts another decimal.
      *
      * @param other Value to subtract.
      */
-    actual fun subtract(other: Decimal): Decimal =
-        checked(value.decimalNumberBySubtracting(other.value))
+    public actual fun subtract(other: Decimal): Decimal =
+        of(subtractPlainDecimalText(toPlainString(), other.toPlainString()))
 
     /**
      * Subtracts another decimal.
      *
      * @param other Value to subtract.
      */
-    actual operator fun minus(other: Decimal): Decimal = subtract(other)
+    public actual operator fun minus(other: Decimal): Decimal = subtract(other)
 
     /**
      * Multiplies by another decimal.
      *
      * @param other Multiplier.
      */
-    actual fun multiply(other: Decimal): Decimal {
-        requirePortableMultiplication(toPlainString(), other.toPlainString())
-        return checked(value.decimalNumberByMultiplyingBy(other.value))
-    }
+    public actual fun multiply(other: Decimal): Decimal =
+        // Foundation raises uncatchable Objective-C exceptions when a rounded product overflows,
+        // so multiply the decimal text in common code with the same rounding as JVM and Android.
+        of(multiplyPlainDecimalText(toPlainString(), other.toPlainString()))
 
     /**
      * Multiplies by another decimal.
      *
      * @param other Multiplier.
      */
-    actual operator fun times(other: Decimal): Decimal = multiply(other)
+    public actual operator fun times(other: Decimal): Decimal = multiply(other)
 
     /**
      * Multiplies by an integer string.
      *
      * @param integer Integer multiplier.
      */
-    actual fun multiplyInteger(integer: String): Decimal = multiply(ofInteger(integer))
+    public actual fun multiplyInteger(integer: String): Decimal = multiply(ofInteger(integer))
 
     /**
      * Divides by another decimal with explicit rounding.
@@ -192,24 +209,13 @@ actual class Decimal internal constructor(
      * @param scale Fractional digits to keep.
      * @param rounding Rounding mode.
      */
-    actual fun divide(other: Decimal, scale: Int, rounding: Rounding): Decimal {
+    public actual fun divide(other: Decimal, scale: Int, rounding: Rounding): Decimal {
         requirePortableScale(scale)
-        if (other.toPlainString() == "0") throw ArithmeticException("Division by zero.")
 
-        val divided = value.decimalNumberByDividingBy(other.value)
-        val rounded = checked(
-            divided.decimalNumberByRoundingAccordingToBehavior(
-                roundingHandler(
-                    scale,
-                    rounding,
-                    divided,
-                )
-            )
-        )
-
-        // Foundation can leave tiny representation artifacts after arithmetic even when a scale was
-        // requested. Recreate the value from decimal text so toPlainString() matches other platforms.
-        return rounded.toExactScaledDecimal(scale, rounding)
+        // Foundation division rounds to 38 digits before a scale can be applied, which rounds twice
+        // and raises uncatchable Objective-C exceptions on underflow. Divide the decimal text in
+        // common code instead so the exact quotient is rounded once, as on JVM and Android.
+        return of(dividePlainDecimalText(toPlainString(), other.toPlainString(), scale, rounding))
     }
 
     /**
@@ -217,7 +223,7 @@ actual class Decimal internal constructor(
      *
      * @param other Divisor.
      */
-    actual operator fun div(other: Decimal): Decimal =
+    public actual operator fun div(other: Decimal): Decimal =
         divide(other, scale = 18, rounding = Rounding.HALF_UP)
 
     /**
@@ -227,7 +233,7 @@ actual class Decimal internal constructor(
      * @param scale Fractional digits to keep.
      * @param rounding Rounding mode.
      */
-    actual fun divideInteger(integer: String, scale: Int, rounding: Rounding): Decimal {
+    public actual fun divideInteger(integer: String, scale: Int, rounding: Rounding): Decimal {
         return divide(ofInteger(integer), scale, rounding)
     }
 
@@ -236,8 +242,10 @@ actual class Decimal internal constructor(
      *
      * @param places Number of places to move.
      */
-    actual fun movePointLeft(places: Int): Decimal {
-        require(places >= 0) { "Places must be non-negative." }
+    public actual fun movePointLeft(places: Int): Decimal {
+        requirePortablePlaces(places)
+        // Zero never changes, and moving it would multiply by a power of ten up to 65k times.
+        if (isZero()) return this
         requirePortablePointMove(toPlainString(), places, toLeft = true)
         return checked(value.decimalNumberByMovingPoint(places, toLeft = true))
     }
@@ -247,8 +255,10 @@ actual class Decimal internal constructor(
      *
      * @param places Number of places to move.
      */
-    actual fun movePointRight(places: Int): Decimal {
-        require(places >= 0) { "Places must be non-negative." }
+    public actual fun movePointRight(places: Int): Decimal {
+        requirePortablePlaces(places)
+        // Zero never changes, and moving it would multiply by a power of ten up to 65k times.
+        if (isZero()) return this
         requirePortablePointMove(toPlainString(), places, toLeft = false)
         return checked(value.decimalNumberByMovingPoint(places, toLeft = false))
     }
@@ -259,35 +269,23 @@ actual class Decimal internal constructor(
      * @param scale Fractional digits to keep.
      * @param rounding Rounding mode.
      */
-    actual fun setScale(scale: Int, rounding: Rounding): Decimal {
+    public actual fun setScale(scale: Int, rounding: Rounding): Decimal {
         requirePortableScale(scale)
-        val rounded = checked(
-            value.decimalNumberByRoundingAccordingToBehavior(
-                roundingHandler(
-                    scale,
-                    rounding,
-                    value,
-                )
-            )
-        )
 
-        // Keep the stored value aligned with the requested scale semantics instead of preserving
-        // Foundation artifacts such as 8518.049999999999 after a scale-2 operation.
-        return rounded.toExactScaledDecimal(scale, rounding)
+        // Round the decimal text in common code: Foundation rounding can leave artifacts such as
+        // 8518.049999999999 after a scale-2 operation and has no half-even mode for all signs.
+        return of(setScalePlainDecimalText(toPlainString(), scale, rounding))
     }
 
     /**
      * Converts to plain string.
      */
-    actual fun toPlainString(): String = value.stringValue.toFoundationPlainDecimalText()
+    public actual fun toPlainString(): String = plainText
 
     /**
      * Converts to integer string.
      */
-    actual fun toIntegerString(): String {
-        val rounded = setScale(0, Rounding.HALF_UP)
-        return rounded.value.stringValue
-    }
+    public actual fun toIntegerString(): String = setScale(0, Rounding.HALF_UP).toPlainString()
 
     /**
      * Converts to a human-friendly string.
@@ -298,21 +296,14 @@ actual class Decimal internal constructor(
      * @param groupingSeparator Optional grouping separator.
      * @param minimumFractionDigits Minimum fractional digits to display.
      */
-    actual fun toFormattedString(
+    public actual fun toFormattedString(
         maximumFractionDigits: Int,
         minimumFractionDigits: Int,
         rounding: Rounding,
         decimalSeparator: Char,
         groupingSeparator: Char?,
     ): String {
-        requirePortableScale(maximumFractionDigits)
-        requirePortableScale(minimumFractionDigits)
-        require(minimumFractionDigits <= maximumFractionDigits) {
-            "Minimum fraction digits must be at most maximumFractionDigits."
-        }
-        require(groupingSeparator == null || groupingSeparator != decimalSeparator) {
-            "Decimal separator cannot also be the grouping separator."
-        }
+        requireFormatArguments(maximumFractionDigits, minimumFractionDigits, decimalSeparator, groupingSeparator)
 
         return setScale(maximumFractionDigits, rounding).toPlainString()
             .toFormattedPlainDecimalText(minimumFractionDigits, decimalSeparator, groupingSeparator)
@@ -321,26 +312,70 @@ actual class Decimal internal constructor(
     /**
      * Returns the absolute value.
      */
-    actual fun abs(): Decimal =
-        if (toPlainString().startsWith("-")) checked(value.decimalNumberByMultiplyingBy(of("-1").value)) else this
+    public actual fun abs(): Decimal {
+        val plain = toPlainString()
+        return if (plain.startsWith("-")) of(plain.drop(1)) else this
+    }
+
+    /**
+     * Returns the negated value.
+     */
+    public actual fun negate(): Decimal {
+        val plain = toPlainString()
+        return when {
+            plain == "0" -> this
+            plain.startsWith("-") -> of(plain.drop(1))
+            else -> of("-$plain")
+        }
+    }
+
+    /**
+     * Returns the negated value.
+     */
+    public actual operator fun unaryMinus(): Decimal = negate()
+
+    /**
+     * Returns the sign of this value.
+     */
+    public actual fun signum(): Int {
+        val plain = toPlainString()
+        return when {
+            plain == "0" -> 0
+            plain.startsWith("-") -> -1
+            else -> 1
+        }
+    }
+
+    /**
+     * Returns whether this value is zero.
+     */
+    public actual fun isZero(): Boolean = toPlainString() == "0"
+
+    /**
+     * Compares decimal values by numeric value.
+     *
+     * @param other Value to compare with.
+     */
+    actual override fun compareTo(other: Decimal): Int =
+        comparePlainDecimalText(toPlainString(), other.toPlainString())
 
     /**
      * Converts this value to debug text.
      */
-    override fun toString(): String = toPlainString()
+    actual override fun toString(): String = toPlainString()
 
     /**
-     * Compares decimal values by plain string.
+     * Compares decimal values by canonical plain string, which is numeric equality.
      *
      * @param other Candidate value.
      */
-    override fun equals(other: Any?): Boolean =
+    actual override fun equals(other: Any?): Boolean =
         other is Decimal && toPlainString() == other.toPlainString()
 
     /**
      * Returns a hash code for this decimal.
      */
-    override fun hashCode(): Int = toPlainString().hashCode()
+    actual override fun hashCode(): Int = toPlainString().hashCode()
 }
 
 /**
@@ -350,53 +385,14 @@ actual class Decimal internal constructor(
  */
 private fun checked(value: NSDecimalNumber): Decimal {
     if (value == NSDecimalNumber.notANumber()) {
-        throw ArithmeticException("Decimal result is outside NSDecimalNumber limits.")
+        throw IllegalArgumentException(
+            "Decimal result is outside the portable range: the exponent must be between " +
+                "$DECIMAL_MIN_EXPONENT and $DECIMAL_MAX_EXPONENT."
+        )
     }
     value.stringValue.requireAppleCompatibleDecimalText()
     return Decimal(value)
 }
-
-/**
- * Creates the behavior object used for explicit scale and rounding.
- *
- * @param scale Fractional digits to keep.
- * @param rounding Rounding mode.
- * @param value Value used to choose sign-aware rounding behavior.
- */
-private fun roundingHandler(
-    scale: Int,
-    rounding: Rounding,
-    value: NSDecimalNumber
-): NSDecimalNumberHandler {
-    return NSDecimalNumberHandler.decimalNumberHandlerWithRoundingMode(
-        roundingMode = rounding.toNativeRoundingMode(value.stringValue.startsWith("-")),
-        scale = scale.toShort(),
-        raiseOnExactness = false,
-        raiseOnOverflow = false,
-        raiseOnUnderflow = false,
-        raiseOnDivideByZero = true,
-    )
-}
-
-/**
- * Converts common rounding to Foundation rounding.
- *
- * @param isNegative Whether the value being rounded is below zero.
- */
-private fun Rounding.toNativeRoundingMode(isNegative: Boolean): NSRoundingMode = when (this) {
-    Rounding.HALF_UP -> NSRoundingMode.NSRoundPlain
-    Rounding.DOWN -> if (isNegative) NSRoundingMode.NSRoundUp else NSRoundingMode.NSRoundDown
-    Rounding.UP -> if (isNegative) NSRoundingMode.NSRoundDown else NSRoundingMode.NSRoundUp
-}
-
-/**
- * Recreates a rounded decimal from plain text to discard Foundation precision artifacts.
- *
- * Foundation formatters are intentionally not used for high-scale values because they can lose
- * useful precision. Plain text rounding keeps the requested scale exact.
- */
-private fun Decimal.toExactScaledDecimal(scale: Int, rounding: Rounding): Decimal =
-    Decimal.of(toPlainString().roundPlainDecimalTextToScale(scale, rounding))
 
 /**
  * Requires that parsed text fits the documented `NSDecimalNumber` envelope.
@@ -443,105 +439,6 @@ private fun String.expandScientificDecimalText(): String {
 
     return if (isNegative && expanded != "0") "-$expanded" else expanded
 }
-
-/**
- * Canonicalizes plain decimal text by removing redundant sign, integer, and fractional zeros.
- */
-private fun String.normalizePlainDecimalText(): String {
-    val isNegative = startsWith("-")
-    val unsigned = when {
-        startsWith("+") || startsWith("-") -> drop(1)
-        else -> this
-    }
-    val parts = unsigned.split('.', limit = 2)
-    val integerPart = parts[0].trimStart('0').ifEmpty { "0" }
-    val fractionPart = parts.getOrElse(1) { "" }.trimEnd('0')
-    val normalized = if (fractionPart.isEmpty()) integerPart else "$integerPart.$fractionPart"
-
-    return if (isNegative && normalized != "0") "-$normalized" else normalized
-}
-
-/**
- * Rounds plain decimal text to a maximum scale without using platform formatters.
- *
- * The decimal operation already applied the requested rounding mode. This cleanup only trims extra
- * digits that are artifacts of Foundation's representation, using the same rounding mode for any
- * text that remains.
- *
- * @param scale Maximum number of fractional digits to keep.
- * @param rounding Rounding mode to apply if extra digits remain.
- */
-private fun String.roundPlainDecimalTextToScale(scale: Int, rounding: Rounding): String {
-    val isNegative = startsWith("-")
-    val unsigned = if (isNegative || startsWith("+")) drop(1) else this
-    val parts = unsigned.split('.', limit = 2)
-    val integerPart = parts[0]
-    val fractionPart = parts.getOrElse(1) { "" }
-
-    if (fractionPart.length <= scale) return this
-
-    val keptFraction = fractionPart.take(scale)
-    val discardedFraction = fractionPart.drop(scale)
-    val shouldRoundUp = when (rounding) {
-        Rounding.HALF_UP -> discardedFraction.first() >= '5'
-        Rounding.DOWN -> false
-        Rounding.UP -> discardedFraction.any { it != '0' }
-    }
-    val unsignedRounded = if (shouldRoundUp) {
-        incrementUnsignedDecimalText(integerPart, keptFraction)
-    } else {
-        joinUnsignedDecimalText(integerPart, keptFraction)
-    }
-
-    return if (isNegative && unsignedRounded != "0") "-$unsignedRounded" else unsignedRounded
-}
-
-/**
- * Adds one unit at the current fractional scale to unsigned plain decimal text.
- *
- * Example at scale 2: 1299 plus one fractional unit becomes 1300, then rejoins as 13.
- *
- * @param integerPart Digits before the decimal point.
- * @param fractionPart Digits after the decimal point that should be preserved.
- */
-private fun incrementUnsignedDecimalText(integerPart: String, fractionPart: String): String {
-    val digits = (integerPart + fractionPart).toMutableList()
-    var index = digits.lastIndex
-
-    while (index >= 0 && digits[index] == '9') {
-        digits[index] = '0'
-        index--
-    }
-
-    if (index >= 0) {
-        digits[index] = digits[index] + 1
-    } else {
-        digits.add(0, '1')
-    }
-
-    val scale = fractionPart.length
-    val rounded = digits.joinToString("")
-    val roundedInteger = if (scale == 0) rounded else rounded.dropLast(scale).ifEmpty { "0" }
-    val roundedFraction = if (scale == 0) "" else rounded.takeLast(scale)
-
-    return joinUnsignedDecimalText(roundedInteger, roundedFraction)
-}
-
-/**
- * Joins unsigned integer and fraction text, then canonicalizes insignificant zeros.
- *
- * The public plain string is canonical, while callers that need fixed display precision should use
- * toFormattedString(maximumFractionDigits = ...).
- *
- * @param integerPart Digits before the decimal point.
- * @param fractionPart Digits after the decimal point.
- */
-private fun joinUnsignedDecimalText(integerPart: String, fractionPart: String): String =
-    if (fractionPart.isEmpty()) {
-        integerPart.trimStart('0').ifEmpty { "0" }
-    } else {
-        "${integerPart.trimStart('0').ifEmpty { "0" }}.$fractionPart".normalizePlainDecimalText()
-    }
 
 /**
  * Formats canonical plain decimal text without routing through Foundation formatters.

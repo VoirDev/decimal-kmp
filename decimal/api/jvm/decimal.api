@@ -1,0 +1,77 @@
+public final class dev/voir/decimal/Decimal : java/lang/Comparable {
+	public static final field Companion Ldev/voir/decimal/Decimal$Companion;
+	public final fun abs ()Ldev/voir/decimal/Decimal;
+	public final fun add (Ldev/voir/decimal/Decimal;)Ldev/voir/decimal/Decimal;
+	public fun compareTo (Ldev/voir/decimal/Decimal;)I
+	public synthetic fun compareTo (Ljava/lang/Object;)I
+	public final fun div (Ldev/voir/decimal/Decimal;)Ldev/voir/decimal/Decimal;
+	public final fun divide (Ldev/voir/decimal/Decimal;ILdev/voir/decimal/Rounding;)Ldev/voir/decimal/Decimal;
+	public final fun divideInteger (Ljava/lang/String;ILdev/voir/decimal/Rounding;)Ldev/voir/decimal/Decimal;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public final fun isZero ()Z
+	public final fun minus (Ldev/voir/decimal/Decimal;)Ldev/voir/decimal/Decimal;
+	public final fun movePointLeft (I)Ldev/voir/decimal/Decimal;
+	public final fun movePointRight (I)Ldev/voir/decimal/Decimal;
+	public final fun multiply (Ldev/voir/decimal/Decimal;)Ldev/voir/decimal/Decimal;
+	public final fun multiplyInteger (Ljava/lang/String;)Ldev/voir/decimal/Decimal;
+	public final fun negate ()Ldev/voir/decimal/Decimal;
+	public final fun plus (Ldev/voir/decimal/Decimal;)Ldev/voir/decimal/Decimal;
+	public final fun setScale (ILdev/voir/decimal/Rounding;)Ldev/voir/decimal/Decimal;
+	public final fun signum ()I
+	public final fun subtract (Ldev/voir/decimal/Decimal;)Ldev/voir/decimal/Decimal;
+	public final fun times (Ldev/voir/decimal/Decimal;)Ldev/voir/decimal/Decimal;
+	public final fun toFormattedString (IILdev/voir/decimal/Rounding;CLjava/lang/Character;)Ljava/lang/String;
+	public static synthetic fun toFormattedString$default (Ldev/voir/decimal/Decimal;IILdev/voir/decimal/Rounding;CLjava/lang/Character;ILjava/lang/Object;)Ljava/lang/String;
+	public final fun toIntegerString ()Ljava/lang/String;
+	public final fun toPlainString ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+	public final fun unaryMinus ()Ldev/voir/decimal/Decimal;
+}
+
+public final class dev/voir/decimal/Decimal$Companion {
+	public final fun fromDouble (D)Ldev/voir/decimal/Decimal;
+	public final fun fromInt (I)Ldev/voir/decimal/Decimal;
+	public final fun fromLong (J)Ldev/voir/decimal/Decimal;
+	public final fun of (Ljava/lang/String;)Ldev/voir/decimal/Decimal;
+	public final fun ofInteger (Ljava/lang/String;)Ldev/voir/decimal/Decimal;
+	public final fun one ()Ldev/voir/decimal/Decimal;
+	public final fun parse (Ljava/lang/String;)Ldev/voir/decimal/Decimal;
+	public final fun parseFormatted (Ljava/lang/String;CLjava/util/Set;)Ldev/voir/decimal/Decimal;
+	public static synthetic fun parseFormatted$default (Ldev/voir/decimal/Decimal$Companion;Ljava/lang/String;CLjava/util/Set;ILjava/lang/Object;)Ldev/voir/decimal/Decimal;
+	public final fun parseFormattedOrNull (Ljava/lang/String;CLjava/util/Set;)Ldev/voir/decimal/Decimal;
+	public static synthetic fun parseFormattedOrNull$default (Ldev/voir/decimal/Decimal$Companion;Ljava/lang/String;CLjava/util/Set;ILjava/lang/Object;)Ldev/voir/decimal/Decimal;
+	public final fun parseOrNull (Ljava/lang/String;)Ldev/voir/decimal/Decimal;
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+	public final fun zero ()Ldev/voir/decimal/Decimal;
+}
+
+public final class dev/voir/decimal/DecimalInlineKt {
+	public static final fun decimal (Ljava/lang/String;)Ldev/voir/decimal/Decimal;
+	public static final fun formattedDecimal (Ljava/lang/String;CLjava/util/Set;)Ldev/voir/decimal/Decimal;
+	public static synthetic fun formattedDecimal$default (Ljava/lang/String;CLjava/util/Set;ILjava/lang/Object;)Ldev/voir/decimal/Decimal;
+	public static final fun sum (Ljava/lang/Iterable;)Ldev/voir/decimal/Decimal;
+	public static final fun transform (Ldev/voir/decimal/Decimal;Lkotlin/jvm/functions/Function1;)Ldev/voir/decimal/Decimal;
+}
+
+public final class dev/voir/decimal/DecimalSerializer : kotlinx/serialization/KSerializer {
+	public static final field INSTANCE Ldev/voir/decimal/DecimalSerializer;
+	public fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ldev/voir/decimal/Decimal;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public fun serialize (Lkotlinx/serialization/encoding/Encoder;Ldev/voir/decimal/Decimal;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+}
+
+public final class dev/voir/decimal/Rounding : java/lang/Enum {
+	public static final field CEILING Ldev/voir/decimal/Rounding;
+	public static final field DOWN Ldev/voir/decimal/Rounding;
+	public static final field FLOOR Ldev/voir/decimal/Rounding;
+	public static final field HALF_EVEN Ldev/voir/decimal/Rounding;
+	public static final field HALF_UP Ldev/voir/decimal/Rounding;
+	public static final field UP Ldev/voir/decimal/Rounding;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/voir/decimal/Rounding;
+	public static fun values ()[Ldev/voir/decimal/Rounding;
+}
+

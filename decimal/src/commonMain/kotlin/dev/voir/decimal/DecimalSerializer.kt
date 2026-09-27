@@ -13,7 +13,7 @@ import kotlinx.serialization.encoding.Encoder
  * Encoding as a string keeps JSON and other text formats from passing decimal values through
  * binary floating point numbers.
  */
-object DecimalSerializer : KSerializer<Decimal> {
+public object DecimalSerializer : KSerializer<Decimal> {
     /**
      * Describes the serialized decimal value as a primitive string.
      */
@@ -23,6 +23,8 @@ object DecimalSerializer : KSerializer<Decimal> {
      * Reads a decimal value from a serialized plain decimal string.
      *
      * @param decoder Source decoder.
+     * @throws IllegalArgumentException When the string is not plain decimal text inside the
+     * portable envelope, with the same message as [Decimal.parse].
      */
     override fun deserialize(decoder: Decoder): Decimal = Decimal.parse(decoder.decodeString())
 

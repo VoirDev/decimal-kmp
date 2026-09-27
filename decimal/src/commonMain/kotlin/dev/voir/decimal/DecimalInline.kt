@@ -5,7 +5,7 @@ package dev.voir.decimal
  *
  * @param value Plain decimal text accepted by [Decimal.parse].
  */
-inline fun decimal(value: String): Decimal = Decimal.parse(value)
+public fun decimal(value: String): Decimal = Decimal.parse(value)
 
 /**
  * Convenience factory for [Decimal.parseFormatted].
@@ -14,7 +14,7 @@ inline fun decimal(value: String): Decimal = Decimal.parse(value)
  * @param decimalSeparator Separator used for the fractional part.
  * @param groupingSeparators Candidate separators used for digit grouping.
  */
-inline fun formattedDecimal(
+public fun formattedDecimal(
     value: String,
     decimalSeparator: Char = '.',
     groupingSeparators: Set<Char> = setOf(',', ' ', '_'),
@@ -25,4 +25,11 @@ inline fun formattedDecimal(
  *
  * @param block Transformation to apply.
  */
-inline fun Decimal.transform(block: (Decimal) -> Decimal): Decimal = block(this)
+public inline fun Decimal.transform(block: (Decimal) -> Decimal): Decimal = block(this)
+
+/**
+ * Returns the sum of all decimals, or zero when the collection is empty.
+ *
+ * Each addition uses the portable 38-significant-digit rounding of [Decimal.plus].
+ */
+public fun Iterable<Decimal>.sum(): Decimal = fold(Decimal.zero()) { total, value -> total + value }
